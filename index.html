@@ -312,6 +312,7 @@
                             const address = getRowVal(row, ['地址', 'Address']);
                             const mapUrl = getRowVal(row, ['地圖', '地圖連結', 'Google Map', 'Map']) || `https://maps.google.com/?q=${encodeURIComponent(name || '苗栗公館')}`;
                             const time = getRowVal(row, ['營業時間', '時間', 'Time']);
+                            const tag = getRowVal(row, ['標籤', 'Tag', 'F', '特色']); // 讀取 Excel F 欄標籤
                             const note = getRowVal(row, ['特色說明', '備註', 'Note']);
                             const extraUrl = getRowVal(row, ['其他連結', '官網', 'ExtraUrl']);
                             const extraType = getRowVal(row, ['其他連結名稱', 'ExtraType']) || '相關連結';
@@ -325,6 +326,7 @@
                                 address: address,
                                 mapUrl: mapUrl,
                                 time: time,
+                                tag: tag,
                                 note: note,
                                 extraUrl: extraUrl,
                                 extraType: extraType
@@ -427,6 +429,8 @@
             data.forEach(item => {
                 const isFav = favorites.includes(item.id);
                 const isSpot = item.type === 'spot';
+                // 使用 Excel F 欄的標籤資料，若無則降級為預設名稱
+                const displayTag = item.tag || (isSpot ? '觀光景點' : '在地美食');
                 
                 const card = document.createElement('div');
                 card.className = "bg-white rounded-3xl p-6 border border-stone-100 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col justify-between";
@@ -440,7 +444,7 @@
                         </div>
                         <div class="mb-4">
                             <span class="${isSpot ? 'bg-olive-50 text-olive-600' : 'bg-amber-50 text-amber-600'} text-xs px-2.5 py-1 rounded-md font-black">
-                                ${isSpot ? '📍 觀光景點' : '🍔 在地美食'}
+                                ${displayTag}
                             </span>
                         </div>
                         <div class="space-y-2 text-stone-600 text-sm mb-6">
@@ -530,7 +534,7 @@
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
                             <a href="${item.mapUrl}" target="_blank" class="w-8 h-8 rounded-full bg-olive-50 text-olive-600 flex items-center justify-center text-sm"><i class="fa-solid fa-map-location-dot"></i></a>
-                            <button onclick="toggleFavorite('${item.id}')" class="w-8 h-8 rounded-full bg-jujube-50 text-jujube-500 flex items-center justify-center text-sm"><i class="fa-solid fa-trash-can"></i></button>
+                            <button onclick="toggleFavorite('${item.id}')" class="w-8 h-8 rounded-full bg-jujube-50 text-jujube-500 flex items-center justify-center text-sm"><i class="fa-solid fa-trash"></i></button>
                         </div>
                     `;
                     list.appendChild(block);
@@ -538,15 +542,20 @@
             });
         }
 
-        function copyAddress(text) {
-            navigator.clipboard.writeText(text).then(() => showToast('地址複製成功！')).catch(() => showToast('複製失敗'));
+        function copyAddress(addr) {
+            if (!addr) return;
+            navigator.clipboard.writeText(addr).then(() => {
+                showToast('已複製地址！');
+            });
         }
 
-        function showToast(message) {
+        function showToast(msg) {
             const toast = document.getElementById('toast');
-            document.getElementById('toast-message').innerText = message;
+            const toastMsg = document.getElementById('toast-message');
+            toastMsg.innerText = msg;
             toast.classList.remove('translate-y-20', 'opacity-0');
             toast.classList.add('translate-y-0', 'opacity-100');
+            
             setTimeout(() => {
                 toast.classList.remove('translate-y-0', 'opacity-100');
                 toast.classList.add('translate-y-20', 'opacity-0');
