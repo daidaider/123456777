@@ -213,7 +213,6 @@
         }
 
         async function fetchAllData() {
-            // 設定 8 秒超時保護
             const timeout = new Promise((_, reject) => 
                 setTimeout(() => reject(new Error('連線逾時，請確認 Google Sheet 共用權限')), 8000)
             );
@@ -312,7 +311,8 @@
                             const address = getRowVal(row, ['地址', 'Address']);
                             const mapUrl = getRowVal(row, ['地圖', '地圖連結', 'Google Map', 'Map']) || `https://maps.google.com/?q=${encodeURIComponent(name || '苗栗公館')}`;
                             const time = getRowVal(row, ['營業時間', '時間', 'Time']);
-                            const tag = getRowVal(row, ['標籤', 'Tag', 'F', '特色']); // 讀取 Excel F 欄標籤
+                            // 讀取 Excel 第 F 欄的標籤/特色文字
+                            const tag = getRowVal(row, ['標籤', 'Tag', '特色', '標籤名稱']);
                             const note = getRowVal(row, ['特色說明', '備註', 'Note']);
                             const extraUrl = getRowVal(row, ['其他連結', '官網', 'ExtraUrl']);
                             const extraType = getRowVal(row, ['其他連結名稱', 'ExtraType']) || '相關連結';
@@ -429,7 +429,8 @@
             data.forEach(item => {
                 const isFav = favorites.includes(item.id);
                 const isSpot = item.type === 'spot';
-                // 使用 Excel F 欄的標籤資料，若無則降級為預設名稱
+                
+                // 動態帶入 Excel F 欄資料（若空白則帶入預設類別名稱）
                 const displayTag = item.tag || (isSpot ? '觀光景點' : '在地美食');
                 
                 const card = document.createElement('div');
