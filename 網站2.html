@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公館鄉數位導覽系統</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        jujube: { 50: '#FDF4F2', 100: '#FBE8E5', 500: '#A63A2B', 600: '#8E2F22', 700: '#732318' },
+                        olive: { 50: '#F5F7F5', 100: '#EBEFEA', 600: '#3B583F', 700: '#2E4431' },
+                        warm: { 50: '#FAF6F0', 100: '#F3ECE2', 200: '#EBE5DB' }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts & FontAwesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- PapaParse CSV 解析套件 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <style>
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #FAF6F0; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #FAF6F0; }
+        ::-webkit-scrollbar-thumb { background: #EBE5DB; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #A63A2B; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-jujube-100 selection:text-jujube-700">
+
+    <!-- 導航列與Header -->
+    <header class="bg-white border-b border-warm-200 sticky top-0 z-40 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div>
+                    <h1 class="text-xl font-black text-olive-700 tracking-wider">公館鄉數位導覽</h1>
+                    <p class="text-xs text-stone-400">行程推薦與商家名單 (自動同步 Excel 資料)</p>
+                </div>
+            </div>
+            
+            <div class="flex bg-stone-100 p-1 rounded-2xl w-full sm:w-auto">
+                <button onclick="switchTab('orchard')" id="tab-orchard" class="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all duration-300 bg-white text-jujube-500 shadow-sm">
+                    <i class="fa-solid fa-basket-shopping"></i> 紅棗園採果名單
+                </button>
+                <button onclick="switchTab('attractions')" id="tab-attractions" class="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all duration-300 text-stone-600 hover:text-stone-900">
+                    <i class="fa-solid fa-map-pin"></i> 美食與其他景點
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主內容區 -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+
+        <!-- 我的最愛收藏區 -->
+        <div id="favorites-section" class="hidden mb-8 bg-jujube-50/50 border border-jujube-100 rounded-3xl p-6 relative">
+            <h3 class="text-lg font-black text-jujube-700 flex items-center gap-2 mb-4">
+                <i class="fa-solid fa-heart text-jujube-500 animate-pulse"></i> 我的珍藏地圖
+            </h3>
+            <div id="favorites-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+
+        <!-- ==================== 紅棗園採果網站面版 ==================== -->
+        <section id="orchard-panel" class="space-y-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h2 class="text-2xl font-black text-olive-700">紅棗園採果地圖</h2>
+                    <p class="text-sm text-stone-500">公館優質棗農名單，提供直撥、FB與地圖導航</p>
+                </div>
+                <div class="relative w-full md:w-80">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-stone-400">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                    </span>
+                    <input type="text" id="orchard-search" oninput="searchOrchards()" placeholder="搜尋棗園名稱或地址..." class="w-full bg-white border border-stone-200 rounded-2xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-jujube-500 transition shadow-sm">
+                </div>
+            </div>
+
+            <!-- 旅遊溫馨提醒 -->
+            <div class="bg-gradient-to-r from-warm-100 to-warm-50 border border-warm-200 rounded-3xl p-6 md:p-8 shadow-sm relative overflow-hidden">
+                <div class="flex flex-col lg:flex-row gap-6 items-center">
+                    <div class="flex items-center gap-4 lg:w-1/3">
+                        <div class="w-14 h-14 bg-jujube-100 text-jujube-500 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl">
+                            <i class="fa-solid fa-umbrella-beach"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-black text-stone-800">公館棗園重要規範</h3>
+                            <p class="text-xs text-stone-500">保護紅棗果樹，維護優質採果體驗</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 lg:w-2/3 w-full">
+                        <div class="bg-white p-4 rounded-xl shadow-sm flex items-start gap-3 border border-stone-100">
+                            <i class="fa-solid fa-ban text-jujube-500 mt-1"></i>
+                            <div>
+                                <span class="font-bold text-stone-700 block text-sm">棗園請勿撐傘</span>
+                                <span class="text-xs text-stone-500">避免傘尖劃破、勾壞結實累累的紅棗與枝葉。</span>
+                            </div>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm flex items-start gap-3 border border-stone-100">
+                            <i class="fa-solid fa-utensils text-jujube-500 mt-1"></i>
+                            <div>
+                                <span class="font-bold text-stone-700 block text-sm">請勿邊採邊吃</span>
+                                <span class="text-xs text-stone-500">為維護環境衛生，請採後秤重再享用。</span>
+                            </div>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm flex items-start gap-3 border border-stone-100">
+                            <i class="fa-solid fa-circle-exclamation text-jujube-500 mt-1"></i>
+                            <div>
+                                <span class="font-bold text-stone-700 block text-sm">防曬防中暑呦</span>
+                                <span class="text-xs text-stone-500">天氣炎熱，請準備遮陽帽並多補充水分。</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 棗園卡片列表 -->
+            <div id="orchards-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="col-span-full text-center py-12 text-stone-400">
+                    <i class="fa-solid fa-spinner fa-spin text-3xl mb-2"></i>
+                    <p class="font-bold text-sm">正在同步 Excel 資料中...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 其他景點與美食網站面版 ==================== -->
+        <section id="attractions-panel" class="hidden space-y-6">
+            <div class="flex flex-col lg:flex-row justify-between lg:items-center gap-6">
+                <div>
+                    <h2 class="text-2xl font-black text-olive-700">在地美食與觀光景點</h2>
+                    <p class="text-sm text-stone-500">精選公館在地餐廳小吃與熱門打卡景點</p>
+                </div>
+                
+                <div class="flex flex-col md:flex-row gap-4 items-stretch w-full lg:w-auto">
+                    <div class="flex bg-warm-100 border border-warm-200 p-1.5 rounded-2xl gap-2 justify-center">
+                        <label class="flex items-center gap-2 px-4 py-1.5 rounded-xl cursor-pointer font-bold text-sm select-none transition" id="lbl-check-spots">
+                            <input type="checkbox" id="check-spots" checked onchange="filterAttractions()" class="hidden">
+                            <span class="w-4 h-4 rounded-full border border-stone-400 flex items-center justify-center text-xs text-white" id="box-spots"><i class="fa-solid fa-check"></i></span>
+                            🗺️ 人氣景點
+                        </label>
+                        <label class="flex items-center gap-2 px-4 py-1.5 rounded-xl cursor-pointer font-bold text-sm select-none transition" id="lbl-check-food">
+                            <input type="checkbox" id="check-food" checked onchange="filterAttractions()" class="hidden">
+                            <span class="w-4 h-4 rounded-full border border-stone-400 flex items-center justify-center text-xs text-white" id="box-food"><i class="fa-solid fa-check"></i></span>
+                            🍔 在地美食
+                        </label>
+                    </div>
+                    
+                    <div class="relative flex-grow lg:w-72">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-stone-400">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </span>
+                        <input type="text" id="attractions-search" oninput="filterAttractions()" placeholder="搜尋景點/美食名稱..." class="w-full bg-white border border-stone-200 rounded-2xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-olive-600 transition shadow-sm">
+                    </div>
+                </div>
+            </div>
+
+            <div id="attractions-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="col-span-full text-center py-12 text-stone-400">
+                    <i class="fa-solid fa-spinner fa-spin text-3xl mb-2"></i>
+                    <p class="font-bold text-sm">正在同步 Excel 資料中...</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-olive-700 text-warm-50 py-10 mt-16 border-t-4 border-jujube-500">
+        <div class="max-w-7xl mx-auto px-4 text-center space-y-4">
+            <p class="font-bold text-lg text-white">苗栗公館鄉棗農名單及景點導覽系統</p>
+            <p class="text-xs text-stone-300">&copy; 2026 苗栗公館紅棗遊客導覽平台 版權所有.</p>
+        </div>
+    </footer>
+
+    <div id="toast" class="fixed bottom-6 right-6 z-50 bg-stone-900 text-white px-6 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+        <i class="fa-solid fa-circle-check text-green-400 text-lg"></i>
+        <span id="toast-message" class="text-sm font-bold">複製成功！</span>
+    </div>
+
+    <!-- 腳本 -->
+    <script>
+        const ORCHARD_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTSFlzdqDK8om4K8c8-WnEE32VTBbeoWvUx32HUv_jj23pVz8dVVyUHffbD2B0m9wJT0zT-1f-H4X-4/pub?gid=0&single=true&output=csv';
+        const ATTRACTIONS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTSFlzdqDK8om4K8c8-WnEE32VTBbeoWvUx32HUv_jj23pVz8dVVyUHffbD2B0m9wJT0zT-1f-H4X-4/pub?gid=1574629393&single=true&output=csv';
+
+        let orchardsData = [];
+        let attractionsData = [];
+        let favorites = JSON.parse(localStorage.getItem('jujube_favs')) || [];
+
+        window.addEventListener('DOMContentLoaded', () => {
+            fetchAllData();
+        });
+
+        // 通用抓取欄位值
+        function getRowVal(row, keys) {
+            if (!row) return '';
+            const allKeys = Object.keys(row);
+            for (let k of keys) {
+                const foundKey = allKeys.find(ak => ak.trim().toLowerCase() === k.toLowerCase());
+                if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null) {
+                    return row[foundKey].toString().trim();
+                }
+            }
+            return '';
+        }
+
+        async function fetchAllData() {
+            // 設定 8 秒超時保護
+            const timeout = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('連線逾時，請確認 Google Sheet 共用權限')), 8000)
+            );
+
+            try {
+                await Promise.race([
+                    Promise.all([fetchOrchards(), fetchAttractions()]),
+                    timeout
+                ]);
+
+                renderOrchards(orchardsData);
+                renderAttractions(attractionsData);
+                updateCheckboxStyles();
+                renderFavorites();
+            } catch (error) {
+                console.error("資料載入失敗:", error);
+                showErrorState(error.message);
+            }
+        }
+
+        function showErrorState(msg) {
+            const errHtml = `
+                <div class="col-span-full text-center py-12 text-jujube-600 bg-jujube-50 rounded-3xl border border-jujube-100 p-6">
+                    <i class="fa-solid fa-triangle-exclamation text-4xl mb-3"></i>
+                    <p class="font-bold text-base mb-1">無法同步 Google Sheet 資料</p>
+                    <p class="text-xs text-stone-500 mb-4">${msg || '請確認 Excel 權限是否設為「知道連結的任何人」'}</p>
+                    <button onclick="location.reload()" class="bg-jujube-500 text-white text-xs px-4 py-2 rounded-xl font-bold hover:bg-jujube-600 transition">
+                        <i class="fa-solid fa-rotate-right"></i> 重新載入
+                    </button>
+                </div>
+            `;
+            document.getElementById('orchards-grid').innerHTML = errHtml;
+            document.getElementById('attractions-grid').innerHTML = errHtml;
+        }
+
+        function fetchOrchards() {
+            return new Promise((resolve, reject) => {
+                Papa.parse(ORCHARD_CSV_URL, {
+                    download: true,
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        if (!results.data || results.data.length === 0) {
+                            reject(new Error('紅棗園資料為空'));
+                            return;
+                        }
+                        orchardsData = results.data.map((row, index) => {
+                            const name = getRowVal(row, ['名稱', '棗園名稱', '店名', 'Name']);
+                            const phone = getRowVal(row, ['電話', '聯絡電話', 'Phone']);
+                            const address = getRowVal(row, ['地址', '果園地址', 'Address']);
+                            const mapUrl = getRowVal(row, ['地圖', '地圖連結', 'Google Map', 'Map']) || `https://maps.google.com/?q=${encodeURIComponent(name || '苗栗公館')}`;
+                            const info = getRowVal(row, ['備註', '說明', 'Info']);
+                            const fbUrl = getRowVal(row, ['FB', 'FB連結', 'FBUrl']);
+                            const tagStr = getRowVal(row, ['標籤', '特色', 'Tags']);
+                            const alertStr = getRowVal(row, ['公告', '警告', 'Alert']);
+
+                            return {
+                                id: 'o_' + index,
+                                name: name,
+                                phone: phone,
+                                tel: phone.replace(/[^0-9]/g, ''),
+                                address: address,
+                                mapUrl: mapUrl,
+                                info: info,
+                                fbUrl: fbUrl,
+                                tags: tagStr ? tagStr.split(/[,，]/).map(t => t.trim()).filter(Boolean) : [],
+                                alerts: alertStr ? [alertStr] : []
+                            };
+                        }).filter(item => item.name);
+                        resolve();
+                    },
+                    error: function(err) {
+                        reject(err);
+                    }
+                });
+            });
+        }
+
+        function fetchAttractions() {
+            return new Promise((resolve, reject) => {
+                Papa.parse(ATTRACTIONS_CSV_URL, {
+                    download: true,
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        if (!results.data || results.data.length === 0) {
+                            reject(new Error('景點美食資料為空'));
+                            return;
+                        }
+                        attractionsData = results.data.map((row, index) => {
+                            const typeVal = getRowVal(row, ['類型', '種類', 'Type']).toLowerCase();
+                            const isSpot = typeVal.includes('spot') || typeVal.includes('景點');
+                            
+                            const name = getRowVal(row, ['名稱', '景點名稱', '店名', 'Name']);
+                            const phone = getRowVal(row, ['電話', '聯絡電話', 'Phone']);
+                            const address = getRowVal(row, ['地址', 'Address']);
+                            const mapUrl = getRowVal(row, ['地圖', '地圖連結', 'Google Map', 'Map']) || `https://maps.google.com/?q=${encodeURIComponent(name || '苗栗公館')}`;
+                            const time = getRowVal(row, ['營業時間', '時間', 'Time']);
+                            const note = getRowVal(row, ['特色說明', '備註', 'Note']);
+                            const extraUrl = getRowVal(row, ['其他連結', '官網', 'ExtraUrl']);
+                            const extraType = getRowVal(row, ['其他連結名稱', 'ExtraType']) || '相關連結';
+
+                            return {
+                                id: 'a_' + index,
+                                type: isSpot ? 'spot' : 'food',
+                                name: name,
+                                phone: phone,
+                                tel: phone.replace(/[^0-9]/g, ''),
+                                address: address,
+                                mapUrl: mapUrl,
+                                time: time,
+                                note: note,
+                                extraUrl: extraUrl,
+                                extraType: extraType
+                            };
+                        }).filter(item => item.name);
+                        resolve();
+                    },
+                    error: function(err) {
+                        reject(err);
+                    }
+                });
+            });
+        }
+
+        function switchTab(tabName) {
+            const orchardTab = document.getElementById('tab-orchard');
+            const attrTab = document.getElementById('tab-attractions');
+            const orchardPanel = document.getElementById('orchard-panel');
+            const attrPanel = document.getElementById('attractions-panel');
+
+            if (tabName === 'orchard') {
+                orchardTab.className = "flex-grow sm:flex-initial flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all duration-300 bg-white text-jujube-500 shadow-sm";
+                attrTab.className = "flex-grow sm:flex-initial flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all duration-300 text-stone-600 hover:text-stone-900";
+                orchardPanel.classList.remove('hidden');
+                attrPanel.classList.add('hidden');
+            } else {
+                attrTab.className = "flex-grow sm:flex-initial flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all duration-300 bg-white text-olive-600 shadow-sm";
+                orchardTab.className = "flex-grow sm:flex-initial flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all duration-300 text-stone-600 hover:text-stone-900";
+                orchardPanel.classList.add('hidden');
+                attrPanel.classList.remove('hidden');
+            }
+        }
+
+        function renderOrchards(data) {
+            const grid = document.getElementById('orchards-grid');
+            grid.innerHTML = '';
+            
+            if (!data || data.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-12 text-stone-400 font-bold">找不到相符的紅棗果園。</div>`;
+                return;
+            }
+
+            data.forEach(item => {
+                const isFav = favorites.includes(item.id);
+                let tagBadges = (item.tags || []).map(t => `<span class="bg-olive-50 text-olive-600 text-xs px-2 py-1 rounded-md font-bold border border-olive-100">${t}</span>`).join('');
+                let alertBadge = (item.alerts || []).map(a => `<div class="bg-jujube-50 text-jujube-600 text-xs px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border border-jujube-100 mt-2"><i class="fa-solid fa-triangle-exclamation"></i> ${a}</div>`).join('');
+
+                const card = document.createElement('div');
+                card.className = "bg-white rounded-3xl p-6 border border-stone-100 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col justify-between";
+                card.innerHTML = `
+                    <div>
+                        <div class="flex justify-between items-start mb-3">
+                            <h3 class="text-lg font-black text-stone-800">${item.name}</h3>
+                            <button onclick="toggleFavorite('${item.id}')" class="text-xl ${isFav ? 'text-jujube-500' : 'text-stone-300'} transition">
+                                <i class="${isFav ? 'fa-solid' : 'fa-regular'} fa-heart"></i>
+                            </button>
+                        </div>
+                        <div class="flex flex-wrap gap-1.5 mb-4">
+                            <span class="bg-jujube-50 text-jujube-500 text-xs px-2.5 py-1 rounded-md font-black">棗農採果</span>
+                            ${tagBadges}
+                        </div>
+                        <div class="space-y-2 text-stone-600 text-sm mb-6">
+                            <p class="flex items-start gap-2">
+                                <i class="fa-solid fa-location-dot text-stone-400 mt-1"></i>
+                                <span class="hover:text-olive-600 cursor-pointer" onclick="window.open('${item.mapUrl}', '_blank')">${item.address || '公館鄉'}</span>
+                            </p>
+                            ${item.phone ? `<p class="flex items-center gap-2"><i class="fa-solid fa-phone text-stone-400"></i><a href="tel:${item.tel}" class="font-bold text-stone-700 hover:underline">${item.phone}</a></p>` : ''}
+                            ${item.info ? `<p class="bg-warm-50 p-2.5 rounded-xl text-xs font-bold text-stone-600 border border-warm-100"><i class="fa-solid fa-info text-olive-600 mr-1"></i>${item.info}</p>` : ''}
+                            ${alertBadge}
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 pt-4 border-t border-stone-100">
+                        <a href="${item.mapUrl}" target="_blank" class="bg-olive-50 hover:bg-olive-100 text-olive-600 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-map-location-dot"></i> 地圖導航
+                        </a>
+                        ${item.fbUrl ? `<a href="${item.fbUrl}" target="_blank" class="bg-blue-50 hover:bg-blue-100 text-blue-600 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1"><i class="fa-brands fa-facebook"></i> 棗園 FB</a>` : `<button class="bg-stone-50 text-stone-300 py-2 rounded-xl text-xs font-bold cursor-not-allowed" disabled>無社群</button>`}
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function searchOrchards() {
+            const query = document.getElementById('orchard-search').value.toLowerCase().trim();
+            const filtered = orchardsData.filter(item => 
+                item.name.toLowerCase().includes(query) || item.address.toLowerCase().includes(query)
+            );
+            renderOrchards(filtered);
+        }
+
+        function renderAttractions(data) {
+            const grid = document.getElementById('attractions-grid');
+            grid.innerHTML = '';
+
+            if (!data || data.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-12 text-stone-400 font-bold">無相符的景點或美食。</div>`;
+                return;
+            }
+
+            data.forEach(item => {
+                const isFav = favorites.includes(item.id);
+                const isSpot = item.type === 'spot';
+                
+                const card = document.createElement('div');
+                card.className = "bg-white rounded-3xl p-6 border border-stone-100 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col justify-between";
+                card.innerHTML = `
+                    <div>
+                        <div class="flex justify-between items-start mb-3">
+                            <h3 class="text-lg font-black text-stone-800">${item.name}</h3>
+                            <button onclick="toggleFavorite('${item.id}')" class="text-xl ${isFav ? 'text-jujube-500' : 'text-stone-300'} transition">
+                                <i class="${isFav ? 'fa-solid' : 'fa-regular'} fa-heart"></i>
+                            </button>
+                        </div>
+                        <div class="mb-4">
+                            <span class="${isSpot ? 'bg-olive-50 text-olive-600' : 'bg-amber-50 text-amber-600'} text-xs px-2.5 py-1 rounded-md font-black">
+                                ${isSpot ? '📍 觀光景點' : '🍔 在地美食'}
+                            </span>
+                        </div>
+                        <div class="space-y-2 text-stone-600 text-sm mb-6">
+                            <p class="flex items-start gap-2">
+                                <i class="fa-solid fa-location-dot text-stone-400 mt-1"></i>
+                                <span class="hover:text-olive-600 cursor-pointer" onclick="window.open('${item.mapUrl}', '_blank')">${item.address || '公館鄉'}</span>
+                            </p>
+                            ${item.phone ? `<p class="flex items-center gap-2"><i class="fa-solid fa-phone text-stone-400"></i><a href="tel:${item.tel}" class="font-bold text-stone-700 hover:underline">${item.phone}</a></p>` : ''}
+                            ${item.time ? `<p class="flex items-start gap-2 text-xs text-stone-500"><i class="fa-solid fa-clock text-stone-400 mt-0.5"></i>${item.time}</p>` : ''}
+                            ${item.note ? `<p class="bg-stone-50 p-2.5 rounded-xl text-xs font-bold text-stone-600 border border-stone-100"><i class="fa-solid fa-star text-amber-500 mr-1"></i>${item.note}</p>` : ''}
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 pt-4 border-t border-stone-100">
+                        <a href="${item.mapUrl}" target="_blank" class="bg-olive-50 hover:bg-olive-100 text-olive-600 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-map-location-dot"></i> 地圖導航
+                        </a>
+                        ${item.extraUrl ? `<a href="${item.extraUrl}" target="_blank" class="bg-warm-100 hover:bg-warm-200 text-stone-700 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1"><i class="fa-solid fa-globe"></i> ${item.extraType}</a>` : `<button onclick="copyAddress('${item.address}')" class="bg-stone-50 hover:bg-stone-100 text-stone-600 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1"><i class="fa-solid fa-copy"></i> 複製地址</button>`}
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function filterAttractions() {
+            const showSpots = document.getElementById('check-spots').checked;
+            const showFood = document.getElementById('check-food').checked;
+            const query = document.getElementById('attractions-search').value.toLowerCase().trim();
+
+            updateCheckboxStyles();
+
+            let filtered = attractionsData.filter(item => {
+                if (item.type === 'spot' && !showSpots) return false;
+                if (item.type === 'food' && !showFood) return false;
+                return item.name.toLowerCase().includes(query) || item.address.toLowerCase().includes(query);
+            });
+
+            renderAttractions(filtered);
+        }
+
+        function updateCheckboxStyles() {
+            const spotsChecked = document.getElementById('check-spots').checked;
+            const foodChecked = document.getElementById('check-food').checked;
+
+            document.getElementById('lbl-check-spots').className = spotsChecked ? "flex items-center gap-2 px-4 py-1.5 rounded-xl cursor-pointer font-bold text-sm bg-white text-olive-600 shadow-sm" : "flex items-center gap-2 px-4 py-1.5 rounded-xl cursor-pointer font-bold text-sm text-stone-500";
+            document.getElementById('box-spots').className = spotsChecked ? "w-4 h-4 rounded-full bg-olive-600 flex items-center justify-center text-[10px] text-white" : "w-4 h-4 rounded-full border border-stone-300 flex items-center justify-center text-[10px] text-transparent";
+
+            document.getElementById('lbl-check-food').className = foodChecked ? "flex items-center gap-2 px-4 py-1.5 rounded-xl cursor-pointer font-bold text-sm bg-white text-olive-600 shadow-sm" : "flex items-center gap-2 px-4 py-1.5 rounded-xl cursor-pointer font-bold text-sm text-stone-500";
+            document.getElementById('box-food').className = foodChecked ? "w-4 h-4 rounded-full bg-olive-600 flex items-center justify-center text-[10px] text-white" : "w-4 h-4 rounded-full border border-stone-300 flex items-center justify-center text-[10px] text-transparent";
+        }
+
+        function toggleFavorite(id) {
+            const index = favorites.indexOf(id);
+            if (index > -1) {
+                favorites.splice(index, 1);
+                showToast('已移出珍藏清單');
+            } else {
+                favorites.push(id);
+                showToast('已加入珍藏地圖！');
+            }
+            localStorage.setItem('jujube_favs', JSON.stringify(favorites));
+            
+            renderOrchards(orchardsData);
+            filterAttractions();
+            renderFavorites();
+        }
+
+        function renderFavorites() {
+            const section = document.getElementById('favorites-section');
+            const list = document.getElementById('favorites-list');
+            list.innerHTML = '';
+
+            if (favorites.length === 0) {
+                section.classList.add('hidden');
+                return;
+            }
+
+            section.classList.remove('hidden');
+
+            favorites.forEach(favId => {
+                const item = orchardsData.find(o => o.id === favId) || attractionsData.find(a => a.id === favId);
+                if (item) {
+                    const block = document.createElement('div');
+                    block.className = "bg-white p-4 rounded-2xl border border-stone-200 flex justify-between items-center shadow-sm";
+                    block.innerHTML = `
+                        <div class="truncate pr-2">
+                            <h4 class="font-bold text-stone-800 text-sm truncate">${item.name}</h4>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <a href="${item.mapUrl}" target="_blank" class="w-8 h-8 rounded-full bg-olive-50 text-olive-600 flex items-center justify-center text-sm"><i class="fa-solid fa-map-location-dot"></i></a>
+                            <button onclick="toggleFavorite('${item.id}')" class="w-8 h-8 rounded-full bg-jujube-50 text-jujube-500 flex items-center justify-center text-sm"><i class="fa-solid fa-trash-can"></i></button>
+                        </div>
+                    `;
+                    list.appendChild(block);
+                }
+            });
+        }
+
+        function copyAddress(text) {
+            navigator.clipboard.writeText(text).then(() => showToast('地址複製成功！')).catch(() => showToast('複製失敗'));
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').innerText = message;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
