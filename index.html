@@ -199,7 +199,7 @@
             fetchAllData();
         });
 
-        // 通用抓取欄位值
+        // 通用模糊比對 Excel 標頭名稱
         function getRowVal(row, keys) {
             if (!row) return '';
             const allKeys = Object.keys(row);
@@ -213,7 +213,6 @@
         }
 
         async function fetchAllData() {
-            // 設定 8 秒超時保護
             const timeout = new Promise((_, reject) => 
                 setTimeout(() => reject(new Error('連線逾時，請確認 Google Sheet 共用權限')), 8000)
             );
@@ -239,7 +238,7 @@
                 <div class="col-span-full text-center py-12 text-jujube-600 bg-jujube-50 rounded-3xl border border-jujube-100 p-6">
                     <i class="fa-solid fa-triangle-exclamation text-4xl mb-3"></i>
                     <p class="font-bold text-base mb-1">無法同步 Google Sheet 資料</p>
-                    <p class="text-xs text-stone-500 mb-4">${msg || '請確認 Excel 權限是否設為「知道連結的任何人」'}</p>
+                    <p class="text-xs text-stone-500 mb-4">${msg || '請確認 Excel 權限是否設為「發布到網路」'}</p>
                     <button onclick="location.reload()" class="bg-jujube-500 text-white text-xs px-4 py-2 rounded-xl font-bold hover:bg-jujube-600 transition">
                         <i class="fa-solid fa-rotate-right"></i> 重新載入
                     </button>
@@ -264,7 +263,7 @@
                             const name = getRowVal(row, ['名稱', '棗園名稱', '店名', 'Name']);
                             const phone = getRowVal(row, ['電話', '聯絡電話', 'Phone']);
                             const address = getRowVal(row, ['地址', '果園地址', 'Address']);
-                            const mapUrl = getRowVal(row, ['地圖', '地圖連結', 'Google Map', 'Map']) || `https://maps.google.com/?q=${encodeURIComponent(name || '苗栗公館')}`;
+                            const mapUrl = getRowVal(row, ['地圖', '地圖連結', 'Google Map', 'Map', 'GoogleMap']) || (address ? `https://maps.google.com/?q=${encodeURIComponent(address)}` : `https://maps.google.com/?q=${encodeURIComponent(name || '苗栗公館')}`);
                             const info = getRowVal(row, ['備註', '說明', 'Info']);
                             const fbUrl = getRowVal(row, ['FB', 'FB連結', 'FBUrl']);
                             const tagStr = getRowVal(row, ['標籤', '特色', 'Tags']);
@@ -304,27 +303,35 @@
                             return;
                         }
                         attractionsData = results.data.map((row, index) => {
-                            const typeVal = getRowVal(row, ['類型', '種類', 'Type']).toLowerCase();
-                            const isSpot = typeVal.includes('spot') || typeVal.includes('景點');
+                            const rawType = getRowVal(row, ['類型', '類別', '種類', 'Type', 'Category']);
+                            const typeVal = rawType.toLowerCase();
                             
+                            // 判斷是否為景點還是美食 (預設若沒填寫，有景點字眼為 spot，其餘為 food)
+                            const isSpot = typeVal.includes('景點') || typeVal.includes('spot') || typeVal.includes('觀光');
+
                             const name = getRowVal(row, ['名稱', '景點名稱', '店名', 'Name']);
                             const phone = getRowVal(row, ['電話', '聯絡電話', 'Phone']);
                             const address = getRowVal(row, ['地址', 'Address']);
-                            const mapUrl = getRowVal(row, ['地圖', '地圖連結', 'Google Map', 'Map']) || `https://maps.google.com/?q=${encodeURIComponent(name || '苗栗公館')}`;
-                            const time = getRowVal(row, ['營業時間', '時間', 'Time']);
-                            const note = getRowVal(row, ['特色說明', '備註', 'Note']);
-                            const extraUrl = getRowVal(row, ['其他連結', '官網', 'ExtraUrl']);
+                            const mapUrl = getRowVal(row, ['地圖', '地圖連結', 'Google Map', 'Map', 'GoogleMap']) || (address ? `https://maps.google.com/?q=${encodeURIComponent(address)}` : `https://maps.google.com/?q=${encodeURIComponent(name || '苗栗公館')}`);
+                            
+                            // 精確解析營業時間與公休日
+                            const time = getRowVal(row, ['營業時間', '時間', 'Time', '開放時間']);
+                            const closedDay = getRowVal(row, ['公休', '公休日', '休息日', 'Closed']);
+                            const note = getRowVal(row, ['特色說明', '備註', '說明', 'Note']);
+                            const extraUrl = getRowVal(row, ['其他連結', '官網', 'FB', 'ExtraUrl']);
                             const extraType = getRowVal(row, ['其他連結名稱', 'ExtraType']) || '相關連結';
 
                             return {
                                 id: 'a_' + index,
                                 type: isSpot ? 'spot' : 'food',
+                                rawType: rawType || (isSpot ? '景點' : '美食'),
                                 name: name,
                                 phone: phone,
                                 tel: phone.replace(/[^0-9]/g, ''),
                                 address: address,
                                 mapUrl: mapUrl,
                                 time: time,
+                                closedDay: closedDay,
                                 note: note,
                                 extraUrl: extraUrl,
                                 extraType: extraType
@@ -386,21 +393,30 @@
                             <span class="bg-jujube-50 text-jujube-500 text-xs px-2.5 py-1 rounded-md font-black">棗農採果</span>
                             ${tagBadges}
                         </div>
-                        <div class="space-y-2 text-stone-600 text-sm mb-6">
+                        <div class="space-y-2.5 text-stone-600 text-sm mb-6">
+                            <!-- 1. 地址圖標對應地址 -->
+                            ${item.address ? `
                             <p class="flex items-start gap-2">
-                                <i class="fa-solid fa-location-dot text-stone-400 mt-1"></i>
-                                <span class="hover:text-olive-600 cursor-pointer" onclick="window.open('${item.mapUrl}', '_blank')">${item.address || '公館鄉'}</span>
-                            </p>
-                            ${item.phone ? `<p class="flex items-center gap-2"><i class="fa-solid fa-phone text-stone-400"></i><a href="tel:${item.tel}" class="font-bold text-stone-700 hover:underline">${item.phone}</a></p>` : ''}
+                                <i class="fa-solid fa-location-dot text-jujube-500 mt-1 flex-shrink-0"></i>
+                                <span class="hover:text-olive-600 cursor-pointer font-medium" onclick="window.open('${item.mapUrl}', '_blank')">${item.address}</span>
+                            </p>` : ''}
+
+                            <!-- 2. 電話圖標對應電話 -->
+                            ${item.phone ? `
+                            <p class="flex items-center gap-2">
+                                <i class="fa-solid fa-phone text-olive-600 flex-shrink-0"></i>
+                                <a href="tel:${item.tel}" class="font-bold text-stone-700 hover:underline">${item.phone}</a>
+                            </p>` : ''}
+
                             ${item.info ? `<p class="bg-warm-50 p-2.5 rounded-xl text-xs font-bold text-stone-600 border border-warm-100"><i class="fa-solid fa-info text-olive-600 mr-1"></i>${item.info}</p>` : ''}
                             ${alertBadge}
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-2 pt-4 border-t border-stone-100">
-                        <a href="${item.mapUrl}" target="_blank" class="bg-olive-50 hover:bg-olive-100 text-olive-600 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1">
-                            <i class="fa-solid fa-map-location-dot"></i> 地圖導航
+                        <a href="${item.mapUrl}" target="_blank" class="bg-olive-50 hover:bg-olive-100 text-olive-600 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition">
+                            <i class="fa-solid fa-map-location-dot"></i> Google 地圖
                         </a>
-                        ${item.fbUrl ? `<a href="${item.fbUrl}" target="_blank" class="bg-blue-50 hover:bg-blue-100 text-blue-600 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1"><i class="fa-brands fa-facebook"></i> 棗園 FB</a>` : `<button class="bg-stone-50 text-stone-300 py-2 rounded-xl text-xs font-bold cursor-not-allowed" disabled>無社群</button>`}
+                        ${item.fbUrl ? `<a href="${item.fbUrl}" target="_blank" class="bg-blue-50 hover:bg-blue-100 text-blue-600 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition"><i class="fa-brands fa-facebook"></i> 棗園 FB</a>` : `<button class="bg-stone-50 text-stone-300 py-2.5 rounded-xl text-xs font-bold cursor-not-allowed" disabled>無社群</button>`}
                     </div>
                 `;
                 grid.appendChild(card);
@@ -440,24 +456,45 @@
                         </div>
                         <div class="mb-4">
                             <span class="${isSpot ? 'bg-olive-50 text-olive-600' : 'bg-amber-50 text-amber-600'} text-xs px-2.5 py-1 rounded-md font-black">
-                                ${isSpot ? '📍 觀光景點' : '🍔 在地美食'}
+                                ${isSpot ? '📍 ' : '🍔 '}${item.rawType}
                             </span>
                         </div>
-                        <div class="space-y-2 text-stone-600 text-sm mb-6">
+                        <div class="space-y-2.5 text-stone-600 text-sm mb-6">
+                            <!-- 1. 地址圖標對應地址 -->
+                            ${item.address ? `
                             <p class="flex items-start gap-2">
-                                <i class="fa-solid fa-location-dot text-stone-400 mt-1"></i>
-                                <span class="hover:text-olive-600 cursor-pointer" onclick="window.open('${item.mapUrl}', '_blank')">${item.address || '公館鄉'}</span>
-                            </p>
-                            ${item.phone ? `<p class="flex items-center gap-2"><i class="fa-solid fa-phone text-stone-400"></i><a href="tel:${item.tel}" class="font-bold text-stone-700 hover:underline">${item.phone}</a></p>` : ''}
-                            ${item.time ? `<p class="flex items-start gap-2 text-xs text-stone-500"><i class="fa-solid fa-clock text-stone-400 mt-0.5"></i>${item.time}</p>` : ''}
+                                <i class="fa-solid fa-location-dot text-jujube-500 mt-1 flex-shrink-0"></i>
+                                <span class="hover:text-olive-600 cursor-pointer font-medium" onclick="window.open('${item.mapUrl}', '_blank')">${item.address}</span>
+                            </p>` : ''}
+
+                            <!-- 2. 電話圖標對應電話 -->
+                            ${item.phone ? `
+                            <p class="flex items-center gap-2">
+                                <i class="fa-solid fa-phone text-olive-600 flex-shrink-0"></i>
+                                <a href="tel:${item.tel}" class="font-bold text-stone-700 hover:underline">${item.phone}</a>
+                            </p>` : ''}
+
+                            <!-- 3. 營業時間與公休日獨立呈現 -->
+                            ${item.time ? `
+                            <p class="flex items-start gap-2 text-xs text-stone-600">
+                                <i class="fa-solid fa-clock text-amber-500 mt-0.5 flex-shrink-0"></i>
+                                <span><strong class="text-stone-700">營業時間：</strong>${item.time}</span>
+                            </p>` : ''}
+
+                            ${item.closedDay ? `
+                            <p class="flex items-start gap-2 text-xs text-stone-600">
+                                <i class="fa-solid fa-calendar-xmark text-jujube-500 mt-0.5 flex-shrink-0"></i>
+                                <span><strong class="text-stone-700">公休日：</strong>${item.closedDay}</span>
+                            </p>` : ''}
+
                             ${item.note ? `<p class="bg-stone-50 p-2.5 rounded-xl text-xs font-bold text-stone-600 border border-stone-100"><i class="fa-solid fa-star text-amber-500 mr-1"></i>${item.note}</p>` : ''}
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-2 pt-4 border-t border-stone-100">
-                        <a href="${item.mapUrl}" target="_blank" class="bg-olive-50 hover:bg-olive-100 text-olive-600 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1">
-                            <i class="fa-solid fa-map-location-dot"></i> 地圖導航
+                        <a href="${item.mapUrl}" target="_blank" class="bg-olive-50 hover:bg-olive-100 text-olive-600 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition">
+                            <i class="fa-solid fa-map-location-dot"></i> Google 地圖
                         </a>
-                        ${item.extraUrl ? `<a href="${item.extraUrl}" target="_blank" class="bg-warm-100 hover:bg-warm-200 text-stone-700 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1"><i class="fa-solid fa-globe"></i> ${item.extraType}</a>` : `<button onclick="copyAddress('${item.address}')" class="bg-stone-50 hover:bg-stone-100 text-stone-600 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1"><i class="fa-solid fa-copy"></i> 複製地址</button>`}
+                        ${item.extraUrl ? `<a href="${item.extraUrl}" target="_blank" class="bg-warm-100 hover:bg-warm-200 text-stone-700 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition"><i class="fa-solid fa-globe"></i> ${item.extraType}</a>` : `<button onclick="copyAddress('${item.address}')" class="bg-stone-50 hover:bg-stone-100 text-stone-600 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition"><i class="fa-solid fa-copy"></i> 複製地址</button>`}
                     </div>
                 `;
                 grid.appendChild(card);
@@ -474,7 +511,7 @@
             let filtered = attractionsData.filter(item => {
                 if (item.type === 'spot' && !showSpots) return false;
                 if (item.type === 'food' && !showFood) return false;
-                return item.name.toLowerCase().includes(query) || item.address.toLowerCase().includes(query);
+                return item.name.toLowerCase().includes(query) || item.address.toLowerCase().includes(query) || item.rawType.toLowerCase().includes(query);
             });
 
             renderAttractions(filtered);
@@ -495,10 +532,10 @@
             const index = favorites.indexOf(id);
             if (index > -1) {
                 favorites.splice(index, 1);
-                showToast('已移出珍藏清單');
+                showToast("已從珍藏移除");
             } else {
                 favorites.push(id);
-                showToast('已加入珍藏地圖！');
+                showToast("已加入珍藏清單！");
             }
             localStorage.setItem('jujube_favs', JSON.stringify(favorites));
             
@@ -518,38 +555,50 @@
             }
 
             section.classList.remove('hidden');
+            const allItems = [...orchardsData, ...attractionsData];
+            const favItems = allItems.filter(item => favorites.includes(item.id));
 
-            favorites.forEach(favId => {
-                const item = orchardsData.find(o => o.id === favId) || attractionsData.find(a => a.id === favId);
-                if (item) {
-                    const block = document.createElement('div');
-                    block.className = "bg-white p-4 rounded-2xl border border-stone-200 flex justify-between items-center shadow-sm";
-                    block.innerHTML = `
-                        <div class="truncate pr-2">
-                            <h4 class="font-bold text-stone-800 text-sm truncate">${item.name}</h4>
-                        </div>
-                        <div class="flex items-center gap-2 flex-shrink-0">
-                            <a href="${item.mapUrl}" target="_blank" class="w-8 h-8 rounded-full bg-olive-50 text-olive-600 flex items-center justify-center text-sm"><i class="fa-solid fa-map-location-dot"></i></a>
-                            <button onclick="toggleFavorite('${item.id}')" class="w-8 h-8 rounded-full bg-jujube-50 text-jujube-500 flex items-center justify-center text-sm"><i class="fa-solid fa-trash-can"></i></button>
-                        </div>
-                    `;
-                    list.appendChild(block);
-                }
+            favItems.forEach(item => {
+                const card = document.createElement('div');
+                card.className = "bg-white p-4 rounded-2xl shadow-sm border border-warm-200 flex justify-between items-center";
+                card.innerHTML = `
+                    <div>
+                        <h4 class="font-bold text-stone-800 text-sm">${item.name}</h4>
+                        <p class="text-xs text-stone-500">${item.address || '苗栗公館'}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <a href="${item.mapUrl}" target="_blank" class="text-olive-600 hover:text-olive-700 text-sm p-1">
+                            <i class="fa-solid fa-map-location-dot"></i>
+                        </a>
+                        <button onclick="toggleFavorite('${item.id}')" class="text-jujube-500 text-sm p-1">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                `;
+                list.appendChild(card);
             });
         }
 
         function copyAddress(text) {
-            navigator.clipboard.writeText(text).then(() => showToast('地址複製成功！')).catch(() => showToast('複製失敗'));
+            if (!text) {
+                showToast("暫無地址資訊");
+                return;
+            }
+            navigator.clipboard.writeText(text).then(() => {
+                showToast("地址已複製到剪貼簿！");
+            }).catch(() => {
+                showToast("複製失敗，請手動複製");
+            });
         }
 
-        function showToast(message) {
+        function showToast(msg) {
             const toast = document.getElementById('toast');
-            document.getElementById('toast-message').innerText = message;
-            toast.classList.remove('translate-y-20', 'opacity-0');
-            toast.classList.add('translate-y-0', 'opacity-100');
+            const toastMsg = document.getElementById('toast-message');
+            toastMsg.textContent = msg;
+            
+            toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
             setTimeout(() => {
-                toast.classList.remove('translate-y-0', 'opacity-100');
-                toast.classList.add('translate-y-20', 'opacity-0');
+                toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
             }, 2500);
         }
     </script>
